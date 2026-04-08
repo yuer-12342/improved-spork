@@ -3,7 +3,8 @@
 #include <stdlib.h>
 #include <time.h>
 
-int main() {
+int main() 
+{
     int n;               // 要生成的数字个数
     int min = 0, max = 999;  // 随机数范围（可修改）
     FILE *fp;
