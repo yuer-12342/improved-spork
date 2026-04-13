@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>人脸识别 · 实时检测</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            min-height: 100vh;
+            background: linear-gradient(145deg, #1a2a3a, #0f1a24);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Segoe UI', system-ui, -apple-system, 'Roboto', sans-serif;
+            padding: 20px;
+        }
+        .card {
+            background: rgba(30, 40, 50, 0.7);
+            backdrop-filter: blur(8px);
+            border-radius: 40px;
+            padding: 24px 20px 20px 20px;
+            box-shadow: 0 25px 40px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255,255,200,0.2);
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+        }
+        .video-wrapper {
+            position: relative;
+            border-radius: 28px;
+            overflow: hidden;
+            box-shadow: 0 12px 28px black;
+            background: #000;
+        }
+        video, canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 28px;
+        }
+        video {
+            transform: scaleX(-1); /* 镜像，更自然 */
+        }
+        canvas {
+            transform: scaleX(-1);
+        }
+        .relative {
+            position: relative;
+            width: 100%;
+            max-width: 720px;
+            aspect-ratio: 4 / 3;
+        }
+        .info {
+            background: rgba(0,0,0,0.6);
+            padding: 10px 20px;
+            border-radius: 60px;
+            color: #ffefcf;
+            font-weight: 500;
+            font-size: 14px;
+            backdrop-filter: blur(4px);
+            text-align: center;
+        }
+        .status {
+            color: #b9f6ca;
+            font-weight: bold;
+        }
+        button {
+            background: #ffb347;
+            border: none;
+            padding: 10px 28px;
+            border-radius: 60px;
+            font-size: 16px;
+            font-weight: bold;
+            color: #2d2b26;
+            cursor: pointer;
+            transition: 0.2s;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        }
+        button:hover {
+            background: #ff9e1f;
+            transform: scale(1.02);
+        }
+        .footer-note {
+            font-size: 12px;
+            color: #aaa;
+            margin-top: 8px;
+        }
+        @media (max-width: 640px) {
+            .info { font-size: 12px; }
+            button { padding: 8px 20px; font-size: 14px; }
+        }
+    </style>
+</head>
+<body>
+<div class="card">
+    <div class="container">
+        <div class="relative" id="videoContainer">
+            <video id="inputVideo" autoplay playsinline muted></video>
+            <canvas id="overlayCanvas"></canvas>
+        </div>
+        <div class="info" id="statusMsg">
+            🔍 正在加载人脸识别模型... 请稍等
+        </div>
+        <button id="restartBtn">📷 重新开启摄像头</button>
+        <div class="footer-note">
+            💡 人脸识别使用 face-api.js (TinyFaceDetector) — 实时检测并绘制人脸框
+        </div>
+    </div>
+</div>
+
+<!-- 引入 face-api.js 轻量级人脸检测库 -->
+<script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+
+<script>
+    (async function() {
+        const video = document.getElementById('inputVideo');
+        const canvas = document.getElementById('overlayCanvas');
+        const statusDiv = document.getElementById('statusMsg');
+        let stream = null;
+        let detectionInterval = null;
+        let isModelLoaded = false;
+
+        // 设置 canvas 尺寸与视频同步
+        function resizeCanvas() {
+            const container = document.getElementById('videoContainer');
+            const rect = container.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+            video.style.width = `${rect.width}px`;
+            video.style.height = `${rect.height}px`;
+            canvas.style.width = `${rect.width}px`;
+            canvas.style.height = `${rect.height}px`;
+        }
+        window.addEventListener('resize', () => {
+            if (video.videoWidth && video.videoHeight) {
+                resizeCanvas();
+                drawDetections(null); // 清空画布
+            }
+        });
+
+        // 绘制检测结果 (人脸框 + 关键点可选)
+        function drawDetections(detections) {
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if (!detections || detections.length === 0) return;
+            
+            // 注意 canvas 和视频都做了镜像变换(scaleX -1), 但检测返回的坐标是基于原始视频流(未镜像)
+            // 为了画框在正确位置，需要将坐标映射到镜像canvas上: x_new = canvas.width - x - width
+            const w = canvas.width;
+            const h = canvas.height;
+            
+            detections.forEach(det => {
+                const box = det.box;
+                // 原始坐标 (未镜像)
+                let x = box.x;
+                let y = box.y;
+                let width = box.width;
+                let height = box.height;
+                
+                // 将坐标转换到镜像 canvas
+                const mirroredX = w - (x + width);
+                const mirroredY = y;
+                
+                // 绘制矩形框
+                ctx.strokeStyle = '#FFD966';
+                ctx.lineWidth = 3;
+                ctx.shadowBlur = 0;
+                ctx.strokeRect(mirroredX, mirroredY, width, height);
+                
+                // 绘制圆角标签背景
+                ctx.fillStyle = '#FFB347';
+                ctx.font = 'bold 16px "Segoe UI"';
+                const label = '🐶 人脸';
+                const textWidth = ctx.measureText(label).width;
+                ctx.fillRect(mirroredX, mirroredY - 24, textWidth + 12, 24);
+                ctx.fillStyle = '#1e2a2e';
+                ctx.fillText(label, mirroredX + 6, mirroredY - 6);
+                
+                // 可选：绘制关键点（眼睛、鼻子、嘴巴）如果需要更细致体验
+                if (det.landmarks) {
+                    const landmarks = det.landmarks.positions;
+                    ctx.fillStyle = '#FFE484';
+                    landmarks.forEach(point => {
+                        // 同样做镜像转换
+                        const mirrorX = w - point.x;
+                        const mirrorY = point.y;
+                        ctx.beginPath();
+                        ctx.arc(mirrorX, mirrorY, 2.5, 0, 2 * Math.PI);
+                        ctx.fill();
+                    });
+                }
+            });
+        }
+
+        // 加载模型 (使用轻量级 TinyFaceDetector，速度快)
+        async function loadModels() {
+            try {
+                statusDiv.innerHTML = '📥 下载人脸检测模型中... 首次稍慢';
+                // 模型文件从 CDN 加载 (官方提供的权重)
+                const MODEL_URL = 'https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights';
+                await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+                await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+                // 也可以加载表情识别，但会增加体积，这里只用检测+landmark
+                isModelLoaded = true;
+                statusDiv.innerHTML = '✅ 模型加载完成，正在启动摄像头...';
+                return true;
+            } catch (err) {
+                console.error('模型加载失败', err);
+                statusDiv.innerHTML = '❌ 模型加载失败，请刷新页面重试。';
+                return false;
+            }
+        }
+
+        // 开始人脸检测循环 (每帧)
+        function startDetection() {
+            if (detectionInterval) clearInterval(detectionInterval);
+            // 使用 requestAnimationFrame 更流畅
+            async function detectFrame() {
+                if (!video.videoWidth || !video.videoHeight || !isModelLoaded) {
+                    requestAnimationFrame(detectFrame);
+                    return;
+                }
+                try {
+                    // 执行检测 (TinyFaceDetector 返回带边界框和landmarks的结果)
+                    const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions())
+                        .withFaceLandmarks();
+                    // 更新画布
+                    drawDetections(detections);
+                    if (detections.length > 0) {
+                        statusDiv.innerHTML = `🎯 检测到 ${detections.length} 张人脸 · 实时跟踪中`;
+                    } else {
+                        statusDiv.innerHTML = `👀 未检测到人脸 · 请面对摄像头`;
+                    }
+                } catch (e) {
+                    console.warn("检测出错", e);
+                }
+                requestAnimationFrame(detectFrame);
+            }
+            requestAnimationFrame(detectFrame);
+        }
+
+        // 初始化摄像头
+        async function initCamera() {
+            if (stream) {
+                // 关闭已有流
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+            try {
+                const constraints = { 
+                    video: { 
+                        width: { ideal: 640 }, 
+                        height: { ideal: 480 },
+                        facingMode: "user" 
+                    } 
+                };
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = stream;
+                await video.play();
+                // 等待视频元数据加载完成，调整canvas尺寸
+                video.addEventListener('loadedmetadata', () => {
+                    resizeCanvas();
+                    statusDiv.innerHTML = isModelLoaded ? '🎥 摄像头已启动，开始人脸检测' : '🧠 模型加载中，请稍后...';
+                }, { once: true });
+                return true;
+            } catch (err) {
+                console.error('摄像头错误', err);
+                statusDiv.innerHTML = '❌ 无法访问摄像头，请检查权限并刷新重试。';
+                return false;
+            }
+        }
+
+        // 主流程
+        async function main() {
+            await loadModels();
+            const cameraOk = await initCamera();
+            if (cameraOk && isModelLoaded) {
+                startDetection();
+            } else if (!cameraOk) {
+                statusDiv.innerHTML = '📷 请允许摄像头权限，并刷新页面';
+            }
+        }
+
+        // 重启按钮: 重新初始化摄像头和检测
+        document.getElementById('restartBtn').addEventListener('click', async () => {
+            statusDiv.innerHTML = '🔄 重新启动摄像头...';
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+            // 清空canvas
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            await initCamera();
+            if (isModelLoaded) {
+                statusDiv.innerHTML = '✅ 摄像头已重启，检测中';
+            } else {
+                statusDiv.innerHTML = '⚠️ 模型未就绪，请稍等';
+            }
+        });
+
+        // 启动所有
+        main().catch(err => {
+            console.error(err);
+            statusDiv.innerHTML = '⚠️ 初始化失败: ' + err.message;
+        });
+    })();
+</script>
+</body>
+</html>

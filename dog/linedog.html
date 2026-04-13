@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>线条小狗 · 点击点头</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none; /* 避免拖动时高亮，不影响点击 */
+        }
+
+        body {
+            min-height: 100vh;
+            background: linear-gradient(145deg, #f9f3e6 0%, #ffe6d5 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Segoe UI', 'Quicksand', system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            cursor: default;
+            padding: 20px;
+        }
+
+        /* 卡片容器，柔和阴影 */
+        .card {
+            background: rgba(255, 250, 240, 0.7);
+            backdrop-filter: blur(2px);
+            border-radius: 64px;
+            padding: 30px 20px 20px 20px;
+            box-shadow: 0 25px 40px rgba(0, 0, 0, 0.15), inset 0 1px 2px rgba(255,255,240,0.8);
+            transition: all 0.2s;
+        }
+
+        /* 小狗画布区域 */
+        .dog-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+        }
+
+        svg {
+            display: block;
+            margin: 0 auto;
+            filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.1));
+            transition: filter 0.2s;
+        }
+
+        /* 点头动画 — 只对头部组生效 */
+        @keyframes dogNod {
+            0% {
+                transform: rotate(0deg) translateY(0px);
+            }
+            30% {
+                transform: rotate(6deg) translateY(3px);
+            }
+            70% {
+                transform: rotate(-2deg) translateY(1px);
+            }
+            100% {
+                transform: rotate(0deg) translateY(0px);
+            }
+        }
+
+        /* 点头动效类 */
+        .nod-animation {
+            animation: dogNod 0.28s cubic-bezier(0.2, 1.2, 0.4, 1) forwards;
+            transform-origin: 200px 200px;  /* 脖子/身体连接处，让头部自然前倾 */
+        }
+
+        /* 提示文字 — 俏皮风格 */
+        .hint {
+            text-align: center;
+            margin-top: 24px;
+            font-size: 16px;
+            font-weight: 500;
+            color: #b45f2b;
+            background: #fff6e8;
+            display: inline-block;
+            width: auto;
+            padding: 8px 24px;
+            border-radius: 60px;
+            letter-spacing: 1px;
+            backdrop-filter: blur(4px);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+            border: 1px solid #ffe0b5;
+        }
+
+        .hint span {
+            display: inline-block;
+            animation: fingerTap 1.2s infinite ease;
+        }
+
+        @keyframes fingerTap {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(4px); }
+        }
+
+        /* 响应式缩放，保持小狗可爱 */
+        @media (max-width: 550px) {
+            .card {
+                padding: 20px 12px 16px 12px;
+            }
+            svg {
+                width: 90%;
+                height: auto;
+            }
+            .hint {
+                font-size: 13px;
+                padding: 6px 18px;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="card">
+    <div class="dog-container">
+        <!-- 线条小狗 SVG
+             设计理念：流行线条风格，圆润可爱，黑色粗线条 + 温暖浅黄填充
+             整个小狗分组 id="dogGroup" 用于监听点击任意部位
+             头部组件分组 id="headGroup" 点头动画只作用于头部，身体四肢不动，更生动 -->
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="380" height="380">
+            <!-- 定义一些滤镜/阴影可选，保持干净 -->
+            <defs>
+                <style>
+                    .dog-line {
+                        stroke: #2E241F;
+                        stroke-width: 4.2;
+                        stroke-linecap: round;
+                        stroke-linejoin: round;
+                        fill: none;
+                    }
+                    .dog-fill {
+                        fill: #FFF3E0;
+                        stroke: #2E241F;
+                        stroke-width: 3.8;
+                        stroke-linecap: round;
+                        stroke-linejoin: round;
+                    }
+                    .eye-fill {
+                        fill: #2A241F;
+                        stroke: none;
+                    }
+                    .nose-fill {
+                        fill: #2E241F;
+                        stroke: none;
+                    }
+                    .paw-line {
+                        stroke: #2E241F;
+                        stroke-width: 4;
+                        stroke-linecap: round;
+                        fill: none;
+                    }
+                    .tail-line {
+                        stroke: #2E241F;
+                        stroke-width: 4.2;
+                        stroke-linecap: round;
+                        fill: none;
+                    }
+                    .blush {
+                        fill: #FFB7B2;
+                        stroke: none;
+                        opacity: 0.6;
+                    }
+                </style>
+            </defs>
+
+            <!-- 整个小狗组，点击该组内的任何图形部位都会触发点头（因为监听的是dogGroup） -->
+            <g id="dogGroup" style="cursor: pointer;">
+                
+                <!-- ========= 身体部分（四肢 + 躯干 + 尾巴）不动，点头动画只作用于头部组 ========= -->
+                <!-- 身体躯干（椭圆，圆润狗狗身体） -->
+                <ellipse cx="200" cy="260" rx="52" ry="62" class="dog-fill" stroke-width="3.5"/>
+                
+                <!-- 后腿（左） -->
+                <path d="M 165 305 L 150 348 L 165 350" class="paw-line" stroke-width="5" />
+                <!-- 后腿（右） -->
+                <path d="M 235 305 L 250 348 L 235 350" class="paw-line" stroke-width="5" />
+                
+                <!-- 前腿（左） -->
+                <path d="M 155 245 L 138 298 L 150 300" class="paw-line" stroke-width="5" />
+                <!-- 前腿（右） -->
+                <path d="M 245 245 L 262 298 L 250 300" class="paw-line" stroke-width="5" />
+                
+                <!-- 可爱小爪子（肉垫装饰）左前 -->
+                <circle cx="146" cy="300" r="4" fill="#2E241F" />
+                <circle cx="154" cy="300" r="4" fill="#2E241F" />
+                <!-- 右前爪子 -->
+                <circle cx="246" cy="300" r="4" fill="#2E241F" />
+                <circle cx="254" cy="300" r="4" fill="#2E241F" />
+                <!-- 后爪装饰 -->
+                <circle cx="155" cy="349" r="4" fill="#2E241F" />
+                <circle cx="163" cy="349" r="4" fill="#2E241F" />
+                <circle cx="237" cy="349" r="4" fill="#2E241F" />
+                <circle cx="245" cy="349" r="4" fill="#2E241F" />
+                
+                <!-- 小尾巴（卷卷翘起）线条小狗标志性尾巴 -->
+                <path d="M 250 240 Q 280 225 285 205 Q 288 195 278 195" class="tail-line" fill="none" stroke-width="4.5" stroke-linecap="round"/>
+                <!-- 尾巴尖小球 -->
+                <circle cx="276" cy="196" r="5" fill="#2E241F" />
+                
+                <!-- ========= 头部组（点头动画作用域）包含脸、耳朵、五官、胡须等 ========= -->
+                <g id="headGroup">
+                    <!-- 大脸盘子（椭圆形） -->
+                    <ellipse cx="200" cy="150" rx="58" ry="52" class="dog-fill" stroke-width="4" />
+                    
+                    <!-- 左耳（下垂长耳朵，线条小狗灵魂） -->
+                    <path d="M 152 132 Q 120 90 118 65 Q 126 55 140 68 Q 158 95 162 122" class="dog-line" stroke-width="5" fill="#FFF0DC" />
+                    <!-- 左耳内部浅色绒毛 -->
+                    <path d="M 148 125 Q 128 92 126 74 Q 132 67 140 76 Q 153 96 156 118" stroke="#E5C8A3" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+                    
+                    <!-- 右耳（对称下垂） -->
+                    <path d="M 248 132 Q 280 90 282 65 Q 274 55 260 68 Q 242 95 238 122" class="dog-line" stroke-width="5" fill="#FFF0DC" />
+                    <!-- 右耳内部绒毛 -->
+                    <path d="M 252 125 Q 272 92 274 74 Q 268 67 260 76 Q 247 96 244 118" stroke="#E5C8A3" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+                    
+                    <!-- 眼睛（黑亮大眼，高光）左眼 -->
+                    <circle cx="178" cy="140" r="7.5" class="eye-fill" />
+                    <circle cx="176" cy="138" r="2.5" fill="white" />
+                    
+                    <!-- 右眼 -->
+                    <circle cx="222" cy="140" r="7.5" class="eye-fill" />
+                    <circle cx="220" cy="138" r="2.5" fill="white" />
+                    
+                    <!-- 腮红（可爱加分）左 -->
+                    <ellipse cx="163" cy="157" rx="8" ry="5" class="blush" />
+                    <!-- 右腮红 -->
+                    <ellipse cx="237" cy="157" rx="8" ry="5" class="blush" />
+                    
+                    <!-- 小鼻子（黑色三角感） -->
+                    <ellipse cx="200" cy="161" rx="8" ry="6" class="nose-fill" />
+                    <!-- 鼻子高光 -->
+                    <ellipse cx="198" cy="159" rx="2.5" ry="1.8" fill="white" opacity="0.8" />
+                    
+                    <!-- 微笑嘴巴（俏皮弧度） -->
+                    <path d="M 185 171 Q 200 184 215 171" class="dog-line" stroke-width="3.5" fill="none" />
+                    <!-- 小舌头 (可爱点缀) -->
+                    <path d="M 196 177 Q 200 186 204 177" fill="#FF8A7A" stroke="none" />
+                    
+                    <!-- 胡须（左侧三根） -->
+                    <line x1="150" y1="152" x2="128" y2="146" class="dog-line" stroke-width="2.5" />
+                    <line x1="150" y1="158" x2="126" y2="158" class="dog-line" stroke-width="2.5" />
+                    <line x1="150" y1="164" x2="129" y2="170" class="dog-line" stroke-width="2.5" />
+                    
+                    <!-- 右侧胡须 -->
+                    <line x1="250" y1="152" x2="272" y2="146" class="dog-line" stroke-width="2.5" />
+                    <line x1="250" y1="158" x2="274" y2="158" class="dog-line" stroke-width="2.5" />
+                    <line x1="250" y1="164" x2="271" y2="170" class="dog-line" stroke-width="2.5" />
+                    
+                    <!-- 眉毛（可爱短粗眉，增加无辜感） -->
+                    <path d="M 168 126 Q 176 121 183 125" class="dog-line" stroke-width="3" fill="none" />
+                    <path d="M 232 126 Q 224 121 217 125" class="dog-line" stroke-width="3" fill="none" />
+                    
+                    <!-- 头顶三撮呆毛（线条小狗标志性） -->
+                    <path d="M 195 98 Q 200 82 204 98" class="dog-line" stroke-width="3" fill="none" />
+                    <path d="M 188 100 Q 192 86 196 100" class="dog-line" stroke-width="3" fill="none" />
+                    <path d="M 204 100 Q 208 85 212 100" class="dog-line" stroke-width="3" fill="none" />
+                </g>
+            </g>
+        </svg>
+    </div>
+    <div class="hint">
+        🐾 点击小狗任意位置 — 它会开心地点头 🐶 <span>👇</span>
+    </div>
+</div>
+
+<script>
+    (function() {
+        // 获取整个小狗组 (SVG 内的 group)
+        const dogGroup = document.getElementById('dogGroup');
+        // 获取头部组（用于添加点头动画）
+        const headGroup = document.getElementById('headGroup');
+        
+        if (!dogGroup || !headGroup) {
+            console.warn("未找到必要元素，请检查SVG结构");
+            return;
+        }
+        
+        // 动画结束移除class，使得每次点击都能重新触发动画
+        function handleNodEnd() {
+            if (headGroup) {
+                headGroup.classList.remove('nod-animation');
+                // 移除事件监听，避免多次绑定
+                headGroup.removeEventListener('animationend', handleNodEnd);
+            }
+        }
+        
+        // 触发点头：为头部组添加动画类，动画结束后清理
+        function nod() {
+            if (!headGroup) return;
+            // 先移除已有的动画类，再重新添加，保证每次点击都重新播放
+            if (headGroup.classList.contains('nod-animation')) {
+                headGroup.classList.remove('nod-animation');
+                // 强制重绘小技巧：触发浏览器重新计算样式
+                void headGroup.offsetWidth;
+            }
+            headGroup.classList.add('nod-animation');
+            // 监听动画结束，清理类以便下次点击再次播放
+            headGroup.addEventListener('animationend', handleNodEnd, { once: true });
+        }
+        
+        // 为整个小狗组添加点击事件 —— 点击小狗任意部位（耳朵、脸、身体、四肢、尾巴等）都会触发点头
+        // 注意：dogGroup 包含了身体和头部以及四肢尾巴，点击其中任何一个子图形都会冒泡到 dogGroup
+        dogGroup.addEventListener('click', (event) => {
+            // 阻止冒泡到外层不必要的元素（无伤大雅）
+            event.stopPropagation();
+            // 执行点头动画
+            nod();
+            
+            // 附加细微触感反馈（可选，增加趣味）
+            // 轻量级震动效果 (仅移动端支持震动，无影响)
+            if (navigator.vibrate) {
+                navigator.vibrate(20);
+            }
+        });
+        
+        // 为了更好的触屏体验，同时增加 touch 事件，防止移动端延迟
+        dogGroup.addEventListener('touchstart', (event) => {
+            // 防止页面滚动或缩放干扰
+            event.preventDefault();
+            event.stopPropagation();
+            nod();
+            if (navigator.vibrate) {
+                navigator.vibrate(20);
+            }
+        }, { passive: false });
+        
+        // 可选: 给小狗增加一个悬停小效果 (不是必须，提升互动感)
+        dogGroup.addEventListener('mouseenter', () => {
+            dogGroup.style.cursor = 'pointer';
+        });
+        
+        // 控制台友好提示
+        console.log("🐕 线条小狗已加载！点击它任意部位就会点头~");
+    })();
+</script>
+</body>
+</html>
